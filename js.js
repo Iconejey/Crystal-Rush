@@ -53,10 +53,13 @@ class Case {
 		let str = this.hole;
 
 		// If hole is a number, replace by '#'
-		if (this.hole !== '.' && this.hole !== 'x') str = '#';
+		if (this.hole !== '.') str = '#';
 
-		// If ore, show ore
-		if (this.ore && this.ore !== '.') str = this.ore;
+		// If not dug and potential ore, show 'x'
+		if (this.hole === '.' && this.ore === 'x') str = 'x';
+
+		// If ore is known, show it
+		if (!isNaN(this.ore)) str = this.ore;
 
 		// If entities, show radars and traps
 		for (let entity of this.entities) {
@@ -68,25 +71,11 @@ class Case {
 		return str;
 	}
 
-	// Set the ore value
-	readOre(value) {
-		// Ignore if value is '?'
-		if (value === '?') return;
-
-		// If value is an integer, set ore value
-		if (!isNaN(value)) this.ore = parseInt(value);
-	}
-
-	// Set the hole value
-	readHole(value, turn) {
-		if (value === '1' && this.hole === '.') this.hole = turn;
-	}
-
 	constructor(x, y) {
 		this.x = x;
 		this.y = y;
 
-		// '.' = unknown, '?' = maybe, int = ore
+		// '.' = unknown, '?' = potential ore, int = ore
 		this.ore = '.';
 
 		// '.' = unknown, int = the turn the hole was dug
@@ -94,6 +83,42 @@ class Case {
 
 		// Entities on the case
 		this.entities = [];
+	}
+
+	// Set the ore value
+	readOre(value) {
+		// Ignore if value is '?'
+		if (value === '?') return;
+
+		// If value is an integer, parse it
+		if (!isNaN(value)) this.ore = parseInt(value);
+
+		// If value is 'x', set as potential ore if not already dug
+		if (value === 'x' && this.ore === '.' && this.hole === '.') this.ore = 'x';
+
+		// If ore is not unknown, add it to the list of ores
+		if (this.ore !== '.') {
+			if (this.ore === 'x') game.potential_ores.push(this);
+			else game.ores.push(this);
+		}
+	}
+
+	// Set the hole value
+	readHole(value) {
+		// If not a hole, ignore
+		if (value !== '1') return;
+
+		// Save turn if hole is dug
+		if (this.hole === '.') this.hole = game.turn;
+
+		// If hole was dug less than 10 turns ago
+		if (this.turns_since_dug < 10) {
+			// For each neighbor
+			for (const neighbor of this.neighbors) {
+				// If neighbor is unknown, set as potential ore
+				if (neighbor.ore === '.') neighbor.readOre('x');
+			}
+		}
 	}
 }
 
@@ -114,6 +139,7 @@ class Game {
 
 		this.entities = [];
 		this.ores = [];
+		this.potential_ores = [];
 		this.holes = [];
 
 		this.grid = [];
@@ -155,7 +181,13 @@ class Game {
 		this.my_score = parseInt(inputs[0]);
 		this.opponent_score = parseInt(inputs[1]);
 
+		// Set all potential ores to unknown
+		for (let c of this.potential_ores) {
+			if (c.ore === 'x') c.ore = '.';
+		}
+
 		this.ores = [];
+		this.potential_ores = [];
 		this.holes = [];
 
 		// Read grid
@@ -167,6 +199,9 @@ class Game {
 				c.readOre(inputs[2 * j]);
 				c.readHole(inputs[2 * j + 1], this.turn);
 				c.entities = [];
+
+				if (c.ore !== '.') this.ores.push(c);
+				if (c.hole !== '.') this.holes.push(c);
 			}
 		}
 
@@ -193,7 +228,7 @@ game.readInitialInput();
 
 // Game loop
 while (true) {
-	this.turn++;
+	game.turn++;
 
 	// Read the turn input
 	game.readTurnInput();
@@ -204,6 +239,5 @@ while (true) {
 	// Example bot actions
 	for (let ally of game.allies) {
 		ally.wait();
-		console.error(ally);
 	}
 }
