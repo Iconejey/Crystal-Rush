@@ -40,6 +40,13 @@ class Case {
 
 		return neighbors;
 	}
+
+	// Get the turns since the hole was dug
+	get turns_since_dug() {
+		if (this.hole === '.') return Infinity;
+		return game.turn - this.hole;
+	}
+
 	// Get the case char
 	get char() {
 		// Show hole by default
