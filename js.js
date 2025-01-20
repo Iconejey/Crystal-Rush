@@ -1,10 +1,59 @@
 class Entity {
+	// Get the case where the entity is
+	get case() {
+		return game.grid[this.y][this.x];
+	}
+
+	// Set the entity position and item
+	update(x, y, item) {
+		// Save the old case
+		const old_case = this.case;
+
+		// Update the entity attributes
+		this.x = x;
+		this.y = y;
+		this.item = item;
+
+		// Get the new case
+		const new_case = this.case;
+
+		// Add the entity to the new case
+		new_case.entities.push(this);
+
+		// Get the movement
+		const dx = this.x - old_case.x;
+		const dy = this.y - old_case.y;
+
+		// Detect if the entity is homing
+		const homing = dx < -2 && dy === 0;
+		if (homing && !this.homing_start) {
+			// Save the homing start
+			this.homing_start = old_case;
+
+			// Check the neighbors of the homing start
+			for (let neighbor of this.homing_start.neighbors) {
+				// If the neighbor was just dug
+				if (neighbor.hole && neighbor.turns_since_dug < 3) {
+					// Set the neighbor ore amount as zero if not known
+					neighbor.ore ||= 0;
+
+					// Mark its neighbors as potential ores
+					for (let n_neighbor of neighbor.neighbors) n_neighbor.mark();
+				}
+			}
+		}
+
+		// Detect if the entity stopped homing
+		if (!homing) this.homing_start = null;
+	}
+
 	constructor(id, type, x, y, item) {
 		this.id = id;
 		this.type = ['ALLY', 'ENEMY', 'RADAR', 'TRAP'][type];
 		this.x = x;
 		this.y = y;
 		this.item = item;
+		this.homing_start = null;
 	}
 
 	// Move the bot to a specified position
@@ -41,25 +90,29 @@ class Case {
 		return neighbors;
 	}
 
+	// Get the turns since the hole was marked as potential ore
+	get turns_since_marked() {
+		return this.marked ? game.turn - this.marked : Infinity;
+	}
+
 	// Get the turns since the hole was dug
 	get turns_since_dug() {
-		if (this.hole === '.') return Infinity;
-		return game.turn - this.hole;
+		return this.hole ? game.turn - this.hole : Infinity;
 	}
 
 	// Get the case char
 	get char() {
-		// Show hole by default
-		let str = this.hole;
+		// Show dot by default
+		let str = '.';
 
-		// If hole is a number, replace by '#'
-		if (this.hole !== '.') str = '#';
+		// If marked, show 'x'
+		if (this.marked) str = 'x';
 
-		// If not dug and potential ore, show 'x'
-		if (this.hole === '.' && this.ore === 'x') str = 'x';
+		// If hole, replace by '#'
+		if (this.hole) str = '#';
 
 		// If ore is known, show it
-		if (!isNaN(this.ore)) str = this.ore;
+		if (this.ore !== null) str = this.ore;
 
 		// If entities, show radars and traps
 		for (let entity of this.entities) {
@@ -75,11 +128,14 @@ class Case {
 		this.x = x;
 		this.y = y;
 
-		// '.' = unknown, '?' = potential ore, int = ore
-		this.ore = '.';
+		// int = the turn the hole was dug
+		this.hole = null;
 
-		// '.' = unknown, int = the turn the hole was dug
-		this.hole = '.';
+		// int = ore amount
+		this.ore = null;
+
+		// int = the turn the hole was marked as potential ore
+		this.marked = null;
 
 		// Entities on the case
 		this.entities = [];
@@ -90,17 +146,14 @@ class Case {
 		// Ignore if value is '?'
 		if (value === '?') return;
 
-		// If value is an integer, parse it
-		if (!isNaN(value)) this.ore = parseInt(value);
+		// Parse the ore value
+		this.ore = parseInt(value);
 
-		// If value is 'x', set as potential ore if not already dug
-		if (value === 'x' && this.ore === '.' && this.hole === '.') this.ore = 'x';
+		// Add the case to the ores list
+		game.ores.push(this);
 
-		// If ore is not unknown, add it to the list of ores
-		if (this.ore !== '.') {
-			if (this.ore === 'x') game.potential_ores.push(this);
-			else game.ores.push(this);
-		}
+		// Remove the mark
+		this.marked = null;
 	}
 
 	// Set the hole value
@@ -109,16 +162,22 @@ class Case {
 		if (value !== '1') return;
 
 		// Save turn if hole is dug
-		if (this.hole === '.') this.hole = game.turn;
+		this.hole ||= game.turn;
 
-		// If hole was dug less than 10 turns ago
-		if (this.turns_since_dug < 10) {
-			// For each neighbor
-			for (const neighbor of this.neighbors) {
-				// If neighbor is unknown, set as potential ore
-				if (neighbor.ore === '.') neighbor.readOre('x');
-			}
-		}
+		// Remove the mark
+		this.marked = null;
+	}
+
+	// Mark the case as potential ore
+	mark() {
+		// Ignore if already known
+		if (this.ore || this.hole) return;
+
+		// If not already marked, add it to the list
+		if (!this.marked) game.marked_cases.push(this);
+
+		// Update the turn
+		this.marked = game.turn;
 	}
 }
 
@@ -139,8 +198,8 @@ class Game {
 
 		this.entities = [];
 		this.ores = [];
-		this.potential_ores = [];
 		this.holes = [];
+		this.marked_cases = [];
 
 		this.grid = [];
 	}
@@ -181,13 +240,14 @@ class Game {
 		this.my_score = parseInt(inputs[0]);
 		this.opponent_score = parseInt(inputs[1]);
 
-		// Set all potential ores to unknown
-		for (let c of this.potential_ores) {
-			if (c.ore === 'x') c.ore = '.';
-		}
+		// Filter marked cases to remove old ones
+		this.marked_cases = this.marked_cases.filter(c => {
+			if (c.turns_since_marked > 20) c.marked = null;
+			return c.marked;
+		});
 
+		// Reset lists
 		this.ores = [];
-		this.potential_ores = [];
 		this.holes = [];
 
 		// Read grid
@@ -200,8 +260,8 @@ class Game {
 				c.readHole(inputs[2 * j + 1], this.turn);
 				c.entities = [];
 
-				if (c.ore !== '.') this.ores.push(c);
-				if (c.hole !== '.') this.holes.push(c);
+				if (c.ore) this.ores.push(c);
+				if (c.hole) this.holes.push(c);
 			}
 		}
 
@@ -211,13 +271,19 @@ class Game {
 		this.radar_cooldown = parseInt(inputs[1]);
 		this.trap_cooldown = parseInt(inputs[2]);
 
-		this.entities = [];
-
 		for (let i = 0; i < entity_count; i++) {
 			inputs = readline().split(' ');
-			const entity = new Entity(parseInt(inputs[0]), parseInt(inputs[1]), parseInt(inputs[2]), parseInt(inputs[3]), parseInt(inputs[4]));
-			this.entities.push(entity);
-			this.grid[entity.y][entity.x].entities.push(entity);
+			const [id, type, x, y, item] = inputs.map(x => parseInt(x));
+
+			// If entity does not exist, create it
+			if (!this.entities[id]) {
+				this.entities[id] = new Entity(id, type, x, y, item);
+				continue;
+			}
+
+			// Else update the entity
+			const entity = this.entities[id];
+			entity.update(x, y, item);
 		}
 	}
 }
