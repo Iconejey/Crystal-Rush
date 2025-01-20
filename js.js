@@ -164,6 +164,7 @@ class Game {
 			inputs = readline().split(' ');
 			const entity = new Entity(parseInt(inputs[0]), parseInt(inputs[1]), parseInt(inputs[2]), parseInt(inputs[3]), parseInt(inputs[4]));
 			this.entities.push(entity);
+			this.grid[entity.y][entity.x].entities.push(entity);
 		}
 	}
 }
