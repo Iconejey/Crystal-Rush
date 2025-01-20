@@ -4,13 +4,43 @@ class Entity {
 		return game.grid[this.y][this.x];
 	}
 
-	constructor(id, type, x, y, item) {
+	// Get the nearest ore
+	get nearest_ore() {
+		return this.nearest(game.ores);
+	}
+
+	// Get the nearest marked case
+	get nearest_marked() {
+		return this.nearest(game.marked_cases);
+	}
+
+	constructor(id, type, x, y) {
 		this.id = id;
 		this.type = ['ALLY', 'ENEMY', 'RADAR', 'TRAP'][type];
 		this.x = x;
 		this.y = y;
-		this.item = item;
+		this.item = null;
 		this.homing_start = null;
+	}
+
+	nearest(list) {
+		let nearest = null;
+		let nearest_distance = Infinity;
+
+		// Loop through the list
+		for (let item of list) {
+			// Calculate the distance
+			const distance = (item.x - this.x) ** 2 + (item.y - this.y) ** 2;
+
+			// If the distance is less than the nearest distance
+			if (distance < nearest_distance) {
+				// Update the nearest item
+				nearest = item;
+				nearest_distance = distance;
+			}
+		}
+
+		return nearest;
 	}
 
 	// Set the entity position and item
@@ -21,7 +51,13 @@ class Entity {
 		// Update the entity attributes
 		this.x = x;
 		this.y = y;
-		this.item = item;
+
+		this.item = {
+			'-1': null,
+			2: 'RADAR',
+			3: 'TRAP',
+			4: 'CRYSTAL'
+		}[item];
 
 		// Get the new case
 		const new_case = this.case;
@@ -63,7 +99,8 @@ class Entity {
 
 	// Dig at a specified position
 	dig(x, y) {
-		console.log(`DIG ${x} ${y}`);
+		const char = game.grid[y][x].char;
+		console.log(`DIG ${x} ${y} ${char}`);
 	}
 
 	// Request an item
@@ -74,6 +111,30 @@ class Entity {
 	// Wait action
 	wait() {
 		console.log('WAIT');
+	}
+
+	// Homing action
+	homing() {
+		this.move(0, this.y);
+	}
+
+	// Do the bot action
+	doAction() {
+		console.error(this.type, this.x, this.y, this.item);
+
+		// If the bot carries a crystal, return to base
+		if (this.item === 'CRYSTAL') return this.homing();
+
+		// Get the nearest ore or marked case
+		const nearest = this.nearest_ore || this.nearest_marked;
+		if (nearest) return this.dig(nearest.x, nearest.y);
+
+		// If no nearest, move towards the furthest hole
+		const furthest = game.furthest_hole;
+		if (furthest) return this.move(furthest.x, this.y);
+
+		// If no furthest, wait
+		this.wait();
 	}
 }
 
@@ -187,6 +248,19 @@ class Game {
 		return this.entities.filter(e => e.type === 'ALLY');
 	}
 
+	// Get the furthest hole
+	get furthest_hole() {
+		let furthest = null;
+
+		// Loop through the holes
+		for (let hole of this.holes) {
+			// If no furthest or hole is further
+			if (!furthest || hole.x > furthest.x) furthest = hole;
+		}
+
+		return furthest;
+	}
+
 	constructor() {
 		this.map_width = 0;
 		this.map_height = 0;
@@ -240,12 +314,6 @@ class Game {
 		this.my_score = parseInt(inputs[0]);
 		this.opponent_score = parseInt(inputs[1]);
 
-		// Filter marked cases to remove old ones
-		this.marked_cases = this.marked_cases.filter(c => {
-			if (c.turns_since_marked > 20) c.marked = null;
-			return c.marked;
-		});
-
 		// Reset lists
 		this.ores = [];
 		this.holes = [];
@@ -265,6 +333,12 @@ class Game {
 			}
 		}
 
+		// Filter marked cases to remove old ones
+		this.marked_cases = this.marked_cases.filter(c => {
+			if (c.turns_since_marked > 20) c.marked = null;
+			return c.marked;
+		});
+
 		// Read entities
 		inputs = readline().split(' ');
 		const entity_count = parseInt(inputs[0]);
@@ -277,7 +351,7 @@ class Game {
 
 			// If entity does not exist, create it
 			if (!this.entities[id]) {
-				this.entities[id] = new Entity(id, type, x, y, item);
+				this.entities[id] = new Entity(id, type, x, y);
 				continue;
 			}
 
@@ -304,6 +378,6 @@ while (true) {
 
 	// Example bot actions
 	for (let ally of game.allies) {
-		ally.wait();
+		ally.doAction();
 	}
 }
