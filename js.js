@@ -29,6 +29,17 @@ class Entity {
 }
 
 class Case {
+	// Get the neighbors
+	get neighbors() {
+		let neighbors = [];
+
+		if (this.x > 0) neighbors.push(game.grid[this.y][this.x - 1]);
+		if (this.x < game.map_width - 1) neighbors.push(game.grid[this.y][this.x + 1]);
+		if (this.y > 0) neighbors.push(game.grid[this.y - 1][this.x]);
+		if (this.y < game.map_height - 1) neighbors.push(game.grid[this.y + 1][this.x]);
+
+		return neighbors;
+	}
 	// Get the case char
 	get char() {
 		// Show hole by default
