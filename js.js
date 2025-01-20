@@ -21,6 +21,7 @@ class Entity {
 		this.y = y;
 		this.item = null;
 		this.homing_start = null;
+		this.target = null;
 	}
 
 	nearest(list) {
@@ -29,6 +30,9 @@ class Entity {
 
 		// Loop through the list
 		for (let item of list) {
+			// If the item is targeted, ignore it
+			if (item.targeted) continue;
+
 			// Calculate the distance
 			const distance = (item.x - this.x) ** 2 + (item.y - this.y) ** 2;
 
@@ -90,6 +94,12 @@ class Entity {
 
 		// Detect if the entity stopped homing
 		if (!homing) this.homing_start = null;
+
+		// If the entity has a target, remove it
+		if (this.target) {
+			this.target.targeted = false;
+			this.target = null;
+		}
 	}
 
 	// Move the bot to a specified position
@@ -99,8 +109,10 @@ class Entity {
 
 	// Dig at a specified position
 	dig(x, y) {
-		const char = game.grid[y][x].char;
-		console.log(`DIG ${x} ${y} ${char}`);
+		const c = game.grid[y][x];
+		this.target = c;
+		c.targeted = true;
+		console.log(`DIG ${x} ${y} ${c.char}`);
 	}
 
 	// Request an item
@@ -188,6 +200,7 @@ class Case {
 	constructor(x, y) {
 		this.x = x;
 		this.y = y;
+		this.targeted = false;
 
 		// int = the turn the hole was dug
 		this.hole = null;
