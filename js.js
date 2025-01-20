@@ -24,6 +24,11 @@ class Entity {
 		this.target = null;
 	}
 
+	// Check if given case is a neighbor
+	isNeighbor(c) {
+		return this.case.neighbors.includes(c);
+	}
+
 	nearest(list) {
 		let nearest = null;
 		let nearest_distance = Infinity;
@@ -83,8 +88,10 @@ class Entity {
 			for (let neighbor of this.homing_start.neighbors) {
 				// If the neighbor was just dug
 				if (neighbor.hole && neighbor.turns_since_dug < 3) {
-					// Set the neighbor ore amount as zero if not known
-					neighbor.ore ||= 0;
+					// Set the neighbor ore amount as one if unknown
+					if (neighbor.ore === null) neighbor.ore = 1;
+					// Decrease the ore amount if known otherwise
+					else if (neighbor.ore > 0) neighbor.ore--;
 
 					// Mark its neighbors as potential ores
 					for (let n_neighbor of neighbor.neighbors) n_neighbor.mark();
@@ -109,10 +116,18 @@ class Entity {
 
 	// Dig at a specified position
 	dig(x, y) {
+		// Get the case
 		const c = game.grid[y][x];
+
+		// Target the case
 		this.target = c;
 		c.targeted = true;
+
+		// Dig the case
 		console.log(`DIG ${x} ${y} ${c.char}`);
+
+		// If the ore is a neighbor, decrease the ore amount
+		if (this.isNeighbor(c) && c.ore > 0) c.ore--;
 	}
 
 	// Request an item
