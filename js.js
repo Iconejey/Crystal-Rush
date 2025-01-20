@@ -4,6 +4,15 @@ class Entity {
 		return game.grid[this.y][this.x];
 	}
 
+	constructor(id, type, x, y, item) {
+		this.id = id;
+		this.type = ['ALLY', 'ENEMY', 'RADAR', 'TRAP'][type];
+		this.x = x;
+		this.y = y;
+		this.item = item;
+		this.homing_start = null;
+	}
+
 	// Set the entity position and item
 	update(x, y, item) {
 		// Save the old case
@@ -45,15 +54,6 @@ class Entity {
 
 		// Detect if the entity stopped homing
 		if (!homing) this.homing_start = null;
-	}
-
-	constructor(id, type, x, y, item) {
-		this.id = id;
-		this.type = ['ALLY', 'ENEMY', 'RADAR', 'TRAP'][type];
-		this.x = x;
-		this.y = y;
-		this.item = item;
-		this.homing_start = null;
 	}
 
 	// Move the bot to a specified position
