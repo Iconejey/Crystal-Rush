@@ -14,6 +14,15 @@ class Entity {
 		return this.nearest(game.marked_cases);
 	}
 
+	// Get the nearest unknown case
+	get nearest_unknown() {
+		// Only use the pair coordinates
+		const unknown_cases = game.unknown_cases.filter(c => c.x % 2 === 0 && c.y % 2 === 0);
+
+		// Return the nearest unknown case
+		return this.nearest(unknown_cases);
+	}
+
 	constructor(id, type, x, y) {
 		this.id = id;
 		this.type = ['ALLY', 'ENEMY', 'RADAR', 'TRAP'][type];
@@ -152,13 +161,9 @@ class Entity {
 		// If the bot carries a crystal, return to base
 		if (this.item === 'CRYSTAL') return this.homing();
 
-		// Get the nearest ore or marked case
-		const nearest = this.nearest_ore || this.nearest_marked;
+		// Get the nearest ore or marked case or unknown case
+		const nearest = this.nearest_ore || this.nearest_marked || this.nearest_unknown;
 		if (nearest) return this.dig(nearest.x, nearest.y);
-
-		// If no nearest, move towards the furthest hole
-		const furthest = game.furthest_hole;
-		if (furthest) return this.move(furthest.x, this.y);
 
 		// If no furthest, wait
 		this.wait();
@@ -302,6 +307,7 @@ class Game {
 		this.ores = [];
 		this.holes = [];
 		this.marked_cases = [];
+		this.unknown_cases = [];
 
 		this.grid = [];
 	}
@@ -345,6 +351,7 @@ class Game {
 		// Reset lists
 		this.ores = [];
 		this.holes = [];
+		this.unknown_cases = [];
 
 		// Read grid
 		for (let i = 0; i < this.map_height; i++) {
@@ -358,12 +365,13 @@ class Game {
 
 				if (c.ore) this.ores.push(c);
 				if (c.hole) this.holes.push(c);
+				if (c.x > 0 && !c.ore && !c.hole) this.unknown_cases.push(c);
 			}
 		}
 
 		// Filter marked cases to remove old ones
 		this.marked_cases = this.marked_cases.filter(c => {
-			if (c.turns_since_marked > 20) c.marked = null;
+			if (c.turns_since_marked > 40) c.marked = null;
 			return c.marked;
 		});
 
