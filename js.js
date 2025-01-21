@@ -38,6 +38,11 @@ class Entity {
 		return this.case.neighbors.includes(c);
 	}
 
+	// Check if given case is reachable
+	isReachable(c) {
+		return c === this.case || this.isNeighbor(c);
+	}
+
 	nearest(list) {
 		let nearest = null;
 		let nearest_distance = Infinity;
@@ -97,8 +102,8 @@ class Entity {
 			for (let neighbor of this.homing_start.neighbors) {
 				// If the neighbor was just dug
 				if (neighbor.hole && neighbor.turns_since_dug < 3) {
-					// Set the neighbor ore amount as one if unknown
-					if (neighbor.ore === null) neighbor.ore = 1;
+					// Set the neighbor ore amount as two if unknown
+					if (neighbor.ore === null) neighbor.ore = 2;
 					// Decrease the ore amount if known otherwise
 					else if (neighbor.ore > 0) neighbor.ore--;
 
@@ -135,8 +140,8 @@ class Entity {
 		// Dig the case
 		console.log(`DIG ${x} ${y} ${c.char}`);
 
-		// If the ore is a neighbor, decrease the ore amount
-		if (this.isNeighbor(c) && c.ore > 0) c.ore--;
+		// If the case is reachable, decrease the ore amount
+		if (this.isReachable(c) && c.ore > 0) c.ore--;
 	}
 
 	// Request an item
@@ -237,6 +242,9 @@ class Case {
 
 	// Set the ore value
 	readOre(value) {
+		// Make sure the ore value is not negative
+		if (this.ore < 0) this.ore = 0;
+
 		// Ignore if value is '?'
 		if (value === '?') return;
 
@@ -365,7 +373,7 @@ class Game {
 
 				if (c.ore) this.ores.push(c);
 				if (c.hole) this.holes.push(c);
-				if (c.x > 0 && !c.ore && !c.hole) this.unknown_cases.push(c);
+				if (c.x > 3 && !c.ore && !c.hole) this.unknown_cases.push(c);
 			}
 		}
 
