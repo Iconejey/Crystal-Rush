@@ -6,7 +6,7 @@ class Entity {
 
 	// Get the nearest ore
 	get nearest_ore() {
-		return this.nearest(game.ores);
+		return this.nearest(game.ores.filter(c => c.ore > 0));
 	}
 
 	// Get the nearest marked case
@@ -92,8 +92,10 @@ class Entity {
 		const dx = this.x - old_case.x;
 		const dy = this.y - old_case.y;
 
-		// Detect if the entity is homing
-		const homing = dx < -2 && dy === 0;
+		// Detect if the entity is a homing enemy
+		const homing = dx < -2 && dy === 0 && this.type === 'ENEMY';
+
+		// Detect if the entity started homing
 		if (homing && !this.homing_start) {
 			// Save the homing start
 			this.homing_start = old_case;
@@ -102,13 +104,8 @@ class Entity {
 			for (let neighbor of this.homing_start.neighbors) {
 				// If the neighbor was just dug
 				if (neighbor.hole && neighbor.turns_since_dug < 3) {
-					// Set the neighbor ore amount as two if unknown
-					if (neighbor.ore === null) neighbor.ore = 2;
-					// Decrease the ore amount if known otherwise
-					else if (neighbor.ore > 0) neighbor.ore--;
-
-					// Mark its neighbors as potential ores
-					for (let n_neighbor of neighbor.neighbors) n_neighbor.mark();
+					// The enemy found a crystal
+					neighbor.found();
 				}
 			}
 		}
@@ -116,8 +113,17 @@ class Entity {
 		// Detect if the entity stopped homing
 		if (!homing) this.homing_start = null;
 
-		// If the entity has a target, remove it
+		// If the entity has a target
 		if (this.target) {
+			// Check if entity dug the target (did not move)
+			if (dx === 0 && dy === 0) {
+				// Decrease the ore amount if the entity now carries a crystal
+				if (this.item === 'CRYSTAL') this.target.found();
+				// Set the ore amount to 0 if the entity did not find a crystal
+				else this.target.ore = 0;
+			}
+
+			// Remove the target if it is not reachable
 			this.target.targeted = false;
 			this.target = null;
 		}
@@ -139,9 +145,7 @@ class Entity {
 
 		// Dig the case
 		console.log(`DIG ${x} ${y} ${c.char}`);
-
-		// If the case is reachable, decrease the ore amount
-		if (this.isReachable(c) && c.ore > 0) c.ore--;
+		this.last_dig = c;
 	}
 
 	// Request an item
@@ -161,8 +165,6 @@ class Entity {
 
 	// Do the bot action
 	doAction() {
-		console.error(this.type, this.x, this.y, this.item);
-
 		// If the bot carries a crystal, return to base
 		if (this.item === 'CRYSTAL') return this.homing();
 
@@ -242,20 +244,17 @@ class Case {
 
 	// Set the ore value
 	readOre(value) {
+		// Parse the ore value
+		if (value !== '?') this.ore = parseInt(value);
+
 		// Make sure the ore value is not negative
 		if (this.ore < 0) this.ore = 0;
 
-		// Ignore if value is '?'
-		if (value === '?') return;
-
-		// Parse the ore value
-		this.ore = parseInt(value);
-
-		// Add the case to the ores list
-		game.ores.push(this);
+		// Add the case to the ores list if not 0
+		if (this.ore) game.ores.push(this);
 
 		// Remove the mark
-		this.marked = null;
+		if (this.ore !== null) this.marked = null;
 	}
 
 	// Set the hole value
@@ -265,6 +264,9 @@ class Case {
 
 		// Save turn if hole is dug
 		this.hole ||= game.turn;
+
+		// Add hole to the list
+		game.holes.push(this);
 
 		// Remove the mark
 		this.marked = null;
@@ -280,6 +282,17 @@ class Case {
 
 		// Update the turn
 		this.marked = game.turn;
+	}
+
+	// A crystal was found
+	found() {
+		// If the case is unknown, set the ore amount to 2
+		if (this.ore === null) this.ore = 2;
+		// Otherwise decrease the ore amount
+		else if (this.ore > 0) this.ore--;
+
+		// Mark neighbors as potential ores
+		for (const neighbor of this.neighbors) neighbor.mark();
 	}
 }
 
@@ -371,8 +384,6 @@ class Game {
 				c.readHole(inputs[2 * j + 1], this.turn);
 				c.entities = [];
 
-				if (c.ore) this.ores.push(c);
-				if (c.hole) this.holes.push(c);
 				if (c.x > 3 && !c.ore && !c.hole) this.unknown_cases.push(c);
 			}
 		}
@@ -382,6 +393,9 @@ class Game {
 			if (c.turns_since_marked > 40) c.marked = null;
 			return c.marked;
 		});
+
+		console.error('ORES', this.ores.length);
+		console.error('MARKED', this.marked_cases.length);
 
 		// Read entities
 		inputs = readline().split(' ');
