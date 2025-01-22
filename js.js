@@ -23,6 +23,33 @@ class Entity {
 		return this.nearest(unknown_cases);
 	}
 
+	// Get the next radar position (nearest strategic case to the last found crystal)
+	get next_radar() {
+		let list = [];
+
+		// Loop through the grid
+		for (let i = 0; i < game.map_height; i++) {
+			for (let j = 4; j < game.map_width; j++) {
+				const mod1 = i % 6 === 1 && j % 8 === 4;
+				const mod2 = i % 6 === 4 && j % 8 === 0;
+
+				if (mod1 || mod2) {
+					// Get the case
+					const c = game.grid[i][j];
+
+					// Check if the case has a radar or trap
+					if (['R', 'T'].includes(c.char)) continue;
+
+					// Add the case to the list
+					list.push(c);
+				}
+			}
+		}
+
+		// Return the nearest case
+		return this.nearest(list, Case.last_found || this.case);
+	}
+
 	constructor(id, type, x, y) {
 		this.id = id;
 		this.type = ['ALLY', 'ENEMY', 'RADAR', 'TRAP'][type];
@@ -31,6 +58,7 @@ class Entity {
 		this.item = null;
 		this.homing_start = null;
 		this.target = null;
+		this.radar_target = null;
 	}
 
 	// Check if given case is a neighbor
@@ -43,7 +71,7 @@ class Entity {
 		return c === this.case || this.isNeighbor(c);
 	}
 
-	nearest(list) {
+	nearest(list, from = this.case) {
 		let nearest = null;
 		let nearest_distance = Infinity;
 
@@ -53,7 +81,7 @@ class Entity {
 			if (item.targeted) continue;
 
 			// Calculate the distance
-			const distance = (item.x - this.x) ** 2 + (item.y - this.y) ** 2;
+			const distance = (item.x - from.x) ** 2 + (item.y - from.y) ** 2;
 
 			// If the distance is less than the nearest distance
 			if (distance < nearest_distance) {
@@ -81,6 +109,9 @@ class Entity {
 			3: 'TRAP',
 			4: 'CRYSTAL'
 		}[item];
+
+		// Remove radar target if the radar is placed
+		if (this.item !== 'RADAR') this.radar_target = null;
 
 		// Get the new case
 		const new_case = this.case;
@@ -151,6 +182,8 @@ class Entity {
 	// Request an item
 	request(item) {
 		console.log(`REQUEST ${item}`);
+		if (item === 'RADAR') game.radar_ready = false;
+		if (item === 'TRAP') game.trap_ready = false;
 	}
 
 	// Wait action
@@ -163,8 +196,23 @@ class Entity {
 		this.move(0, this.y);
 	}
 
+	// Place a radar
+	place_radar() {
+		// If no radar target, get the next radar position
+		if (!this.radar_target) this.radar_target = this.next_radar || this.nearest_unknown;
+
+		// Place the radar
+		this.dig(this.radar_target.x, this.radar_target.y);
+	}
+
 	// Do the bot action
 	doAction() {
+		// If the bot is at the base, a radar is available and ores list is small, request a radar
+		if (this.x === 0 && this.item === null && game.radar_ready && game.ores.length < 10) return this.request('RADAR');
+
+		// If the bot carries a radar, place it
+		if (this.item === 'RADAR') return this.place_radar();
+
 		// If the bot carries a crystal, return to base
 		if (this.item === 'CRYSTAL') return this.homing();
 
@@ -178,6 +226,9 @@ class Entity {
 }
 
 class Case {
+	// The last sucessful dig
+	static last_found = null;
+
 	// Get the neighbors
 	get neighbors() {
 		let neighbors = [];
@@ -293,6 +344,9 @@ class Case {
 
 		// Mark neighbors as potential ores
 		for (const neighbor of this.neighbors) neighbor.mark();
+
+		// Save the last found case
+		Case.last_found = this;
 	}
 }
 
@@ -321,7 +375,9 @@ class Game {
 		this.my_score = 0;
 		this.opponent_score = 0;
 		this.radar_cooldown = 0;
+		this.radar_ready = false;
 		this.trap_cooldown = 0;
+		this.trap_ready = false;
 		this.turn = 0;
 
 		this.entities = [];
@@ -400,8 +456,14 @@ class Game {
 		// Read entities
 		inputs = readline().split(' ');
 		const entity_count = parseInt(inputs[0]);
+
+		// Radar cooldown
 		this.radar_cooldown = parseInt(inputs[1]);
+		this.radar_ready = this.radar_cooldown === 0;
+
+		// Trap cooldown
 		this.trap_cooldown = parseInt(inputs[2]);
+		this.trap_ready = this.trap_cooldown === 0;
 
 		for (let i = 0; i < entity_count; i++) {
 			inputs = readline().split(' ');
